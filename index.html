@@ -34,7 +34,10 @@ button{touch-action:manipulation;cursor:pointer}
 .pill.accent{background:var(--accent);border-color:var(--accent);color:#fff}
 
 #stage{position:relative;background:#000;flex:0 0 auto;height:min(42dvh,56vw + 40px);min-height:200px;overflow:hidden}
+#cropBox{position:absolute;inset:0;overflow:hidden}
 #mirrorBox{position:absolute;inset:0}
+body.vert #cropBox{box-shadow:0 0 0 1px rgba(255,255,255,.12)}
+body.vert #tapLayer{touch-action:none}
 #mirrorBox.mirror{transform:scaleX(-1)}
 #ytWrap,#video{position:absolute;inset:0;width:100%;height:100%}
 #ytWrap iframe{width:100%;height:100%;border:0;display:block}
@@ -148,6 +151,7 @@ body.fs #fsBar{display:flex}
 body.fs #stage{position:fixed;inset:0;height:100dvh;width:100vw;z-index:15;border-radius:0;min-height:0}
 body.fs #stage::after{content:"";position:absolute;left:0;right:0;bottom:0;height:calc(210px + var(--sb));background:linear-gradient(transparent,rgba(0,0,0,.8));pointer-events:none}
 body.fs #fsBar .pill{padding:5px 11px;font-size:13px}
+#fsBar .pill.on{background:var(--accent);border-color:var(--accent);color:#fff}
 body.fs #badges{top:calc(10px + var(--st));left:calc(10px + var(--sl));gap:4px}
 body.fs .badge{font-size:11px;padding:3px 8px}
 body.fs #stage::after{height:calc(120px + var(--sb))}
@@ -208,16 +212,16 @@ body.fs.clean #toast{bottom:calc(24px + var(--sb))}
   </div>
 
   <div id="stage">
-    <div id="mirrorBox">
+    <div id="cropBox"><div id="mirrorBox">
       <div id="ytWrap" class="hidden"><div id="ytHost"></div></div>
       <video id="video" class="hidden" playsinline webkit-playsinline preload="auto"></video>
-    </div>
+    </div></div>
     <div id="tapLayer"></div>
     <div id="badges"><div class="badge mono" id="bSpeed">1.00×</div><div class="badge" id="bLoop">Loop</div><div class="badge mono" id="bReps">Rep 0</div></div>
     <div id="tapIcon">▶</div>
     <div id="hint" class="hidden"><span id="hintText"></span></div>
     <div id="countdown" class="mono"></div>
-    <div id="fsBar"><button class="pill" id="fsHide">Hide</button><button class="pill" id="fsExit" aria-label="Exit fullscreen">✕</button></div>
+    <div id="fsBar"><button class="pill" id="fsVert">9:16</button><button class="pill" id="fsHide">Hide</button><button class="pill" id="fsExit" aria-label="Exit fullscreen">✕</button></div>
     <div id="empty">
       <h2>Add a dance video</h2>
       <p>Paste a YouTube link, or pick a video saved on your device (like a saved TikTok).</p>
@@ -301,6 +305,17 @@ body.fs.clean #toast{bottom:calc(24px + var(--sb))}
     </div>
 
     <div class="panel" id="p-view">
+      <div class="sec">
+        <button class="toggle" id="vertTg"><div><div class="t">Vertical (9:16)</div><div class="d">Crop wide videos into a TikTok-shaped frame</div></div><div class="sw"></div></button>
+        <div class="sub" id="vertOpts">
+          <div class="sec"><h4>Frame position</h4>
+            <input type="range" id="panR" min="0" max="100" step="1" value="50">
+            <div class="lenrow" style="margin-top:-4px"><span>Left</span><button class="chip" id="panCenter" style="height:32px;min-width:0;font-size:13px">Center</button><span>Right</span></div>
+          </div>
+          <div class="sec"><h4>Zoom</h4><div class="chips" id="zoomChips"><button class="chip on" data-v="1">1×</button><button class="chip" data-v="1.25">1.25×</button><button class="chip" data-v="1.5">1.5×</button><button class="chip" data-v="2">2×</button></div></div>
+          <p class="muted" style="margin:10px 0 0">Tip: drag the video sideways to slide the frame. Each video remembers its own crop.</p>
+        </div>
+      </div>
       <div class="sec">
         <button class="toggle" id="mirrorTg"><div><div class="t">Mirror video</div><div class="d">Flip left and right so it matches you</div></div><div class="sw"></div></button>
       </div>
@@ -646,7 +661,73 @@ function setB(){ if(!knownDur) return; B=P.time(); if(B<=A+0.1) A=0; loopsDone=0
 function backToA(){ if(!P) return; cancelCountdown(); P.seek(A); guardUntil=performance.now()+400; loopsDone=0; updateReps(); }
 
 $('#play').onclick = togglePlay;
-$('#tapLayer').onclick = togglePlay;
+$('#tapLayer').onclick = () => { if(suppressTap){ suppressTap=false; return; } togglePlay(); };
+
+/* ================= vertical 9:16 crop ================= */
+let crop = { on:false, pan:0.5, zoom:1 };
+let cropGeom = { cw:0, mw:0 };
+let suppressTap = false;
+function srcAspect(){
+  if(P === FileP && video.videoWidth && video.videoHeight) return video.videoWidth / video.videoHeight;
+  return 16/9;
+}
+function layoutCrop(){
+  const cb = $('#cropBox'), mb = $('#mirrorBox'), st = $('#stage');
+  document.body.classList.toggle('vert', crop.on);
+  $('#vertTg').classList.toggle('on', crop.on);
+  $('#vertOpts').classList.toggle('show', crop.on);
+  $('#fsVert').classList.toggle('on', crop.on);
+  if(!crop.on){ cb.removeAttribute('style'); mb.removeAttribute('style'); return; }
+  const W = st.clientWidth, H = st.clientHeight;
+  if(!W || !H) return;
+  // a 9:16 window; if the screen is already taller than 9:16 (phone held upright in fullscreen), fill it
+  let cw, ch;
+  if(W / H > 9/16){ ch = H; cw = Math.round(H * 9/16); } else { cw = W; ch = H; }
+  const ar = srcAspect();
+  let mh = ch * crop.zoom, mw = mh * ar;
+  if(mw < cw * crop.zoom){ mw = cw * crop.zoom; mh = mw / ar; }
+  const left = (cw - mw) * crop.pan, top = (ch - mh) / 2;
+  cb.style.cssText = 'inset:auto;width:'+cw+'px;height:'+ch+'px;left:'+((W-cw)/2)+'px;top:'+((H-ch)/2)+'px';
+  mb.style.cssText = 'inset:auto;width:'+mw+'px;height:'+mh+'px;left:'+left+'px;top:'+top+'px';
+  cropGeom = { cw, mw };
+}
+function syncCropUI(){
+  $('#panR').value = Math.round(crop.pan * 100);
+  $$('#zoomChips .chip').forEach(c => c.classList.toggle('on', +c.dataset.v === crop.zoom));
+}
+function saveCrop(){ if(storeKey) lsSet('dlc:'+storeKey, crop); }
+function loadCrop(){
+  const c = lsGet('dlc:'+storeKey, null);
+  crop = c ? { on:!!c.on, pan: clamp(+c.pan || 0.5, 0, 1), zoom: +c.zoom || 1 } : { on:false, pan:0.5, zoom:1 };
+  syncCropUI(); layoutCrop();
+}
+function toggleVert(){ crop.on = !crop.on; layoutCrop(); saveCrop(); if(crop.on) toast('Drag the video sideways to move the frame', 2200); }
+$('#vertTg').onclick = toggleVert;
+$('#fsVert').onclick = e => { e.stopPropagation(); toggleVert(); };
+$('#panR').oninput = e => { crop.pan = +e.target.value / 100; layoutCrop(); };
+$('#panR').onchange = saveCrop;
+$('#panCenter').onclick = () => { crop.pan = 0.5; syncCropUI(); layoutCrop(); saveCrop(); };
+$$('#zoomChips .chip').forEach(c => c.onclick = () => { crop.zoom = +c.dataset.v; syncCropUI(); layoutCrop(); saveCrop(); });
+video.addEventListener('loadedmetadata', layoutCrop);
+try{ new ResizeObserver(() => layoutCrop()).observe($('#stage')); }catch(_){ window.addEventListener('resize', layoutCrop); }
+// drag on the video to slide the frame (a plain tap still plays/pauses)
+let panDrag = null;
+const tapL = $('#tapLayer');
+tapL.addEventListener('pointerdown', e => {
+  if(!crop.on) return;
+  panDrag = { x:e.clientX, pan:crop.pan, moved:false };
+  try{ tapL.setPointerCapture(e.pointerId); }catch(_){}
+});
+tapL.addEventListener('pointermove', e => {
+  if(!panDrag) return;
+  const dx = e.clientX - panDrag.x;
+  if(Math.abs(dx) > 8) panDrag.moved = true;
+  const range = cropGeom.mw - cropGeom.cw;
+  if(panDrag.moved && range > 0){ crop.pan = clamp(panDrag.pan - dx / range, 0, 1); layoutCrop(); syncCropUI(); }
+});
+function endPan(){ if(panDrag && panDrag.moved){ suppressTap = true; saveCrop(); setTimeout(()=>{ suppressTap=false; }, 400); } panDrag = null; }
+tapL.addEventListener('pointerup', endPan);
+tapL.addEventListener('pointercancel', endPan);
 $('#back1').onclick = () => seekBy(-1);
 $('#fwd1').onclick = () => seekBy(1);
 $('#frameBack').onclick = () => { if(P){ P.pause(); seekBy(-FRAME); } };
@@ -799,7 +880,7 @@ $('#spUp').onclick = () => rateStep(+1);
 video.addEventListener('ratechange', () => { if(P===FileP) showSpeed(video.playbackRate); });
 
 /* ================= saved sections ================= */
-function loadSections(){ sections = lsGet(storeKey, []) || []; renderSections(); }
+function loadSections(){ sections = lsGet(storeKey, []) || []; renderSections(); loadCrop(); }
 function storeSections(){ lsSet(storeKey, sections); }
 function renderSections(){
   const ul=$('#sections'); ul.innerHTML='';
