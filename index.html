@@ -171,6 +171,17 @@ body.fs .cbtn{width:48px;height:38px;border-radius:10px;font-size:14px;backgroun
 body.fs .cbtn small{display:none}
 body.fs .cbtn.ab{border-color:rgba(255,79,123,.7)}
 body.fs #play{width:44px;height:44px;font-size:17px;box-shadow:none}
+.fsOnly{display:none!important}
+body.fs .fsOnly{display:flex!important}
+body.fs .fsSep{margin-left:8px}
+body.fs #fsReset{width:54px;font-size:12px}
+body.fs #fsBackA{font-size:13px}
+@media (orientation:portrait){
+  body.fs .ctrls{gap:5px;padding-left:8px;padding-right:8px}
+  body.fs .cbtn{width:42px}
+  body.fs #fsReset{width:50px}
+  body.fs .fsSep{margin-left:4px}
+}
 body.fs.clean .tlwrap,body.fs.clean .ctrls,body.fs.clean #stage::after{display:none}
 body.fs #toast{bottom:calc(110px + var(--sb))}
 body.fs.clean #toast{bottom:calc(24px + var(--sb))}
@@ -178,7 +189,7 @@ body.fs.clean #toast{bottom:calc(24px + var(--sb))}
 @media (orientation:landscape){
   body.fs #stage::after{height:calc(70px + var(--sb))}
   body.fs .ctrls{right:auto;justify-content:flex-start;padding:0 0 calc(8px + var(--sb)) calc(12px + var(--sl))}
-  body.fs .tlwrap{left:calc(290px + var(--sl));bottom:calc(4px + var(--sb));padding-left:0}
+  body.fs .tlwrap{left:calc(410px + var(--sl));bottom:calc(4px + var(--sb));padding-left:0}
   body.fs #toast{bottom:calc(70px + var(--sb))}
 }
 @media (orientation:landscape) and (max-height:520px){
@@ -246,6 +257,8 @@ body.fs.clean #toast{bottom:calc(24px + var(--sb))}
     <button id="play" aria-label="Play or pause">▶</button>
     <button class="cbtn" id="fwd1">+1s<small>forward</small></button>
     <button class="cbtn ab" id="setB">B<small>set end</small></button>
+    <button class="cbtn fsOnly fsSep" id="fsBackA" aria-label="Back to A">⏮A</button>
+    <button class="cbtn fsOnly" id="fsReset" aria-label="Reset A to B">Reset</button>
   </div>
 
   <div id="side">
@@ -734,7 +747,8 @@ $('#frameBack').onclick = () => { if(P){ P.pause(); seekBy(-FRAME); } };
 $('#frameFwd').onclick = () => { if(P){ P.pause(); seekBy(FRAME); } };
 $('#setA').onclick = setA; $('#setB').onclick = setB;
 $('#restartBtn').onclick = backToA;
-$('#clearBtn').onclick = () => { A=0; B=knownDur; loopsDone=0; updateReps(); render(); toast('Whole video selected'); };
+$('#clearBtn').onclick = $('#fsReset').onclick = () => { if(!knownDur) return; A=0; B=knownDur; loopsDone=0; updateReps(); render(); buzz(); toast('Whole video selected'); };
+$('#fsBackA').onclick = () => { backToA(); buzz(); };
 $('#loopTg').onclick = () => { loopOn=!loopOn; render(); };
 $('#mirrorTg').onclick = () => { const on = $('#mirrorBox').classList.toggle('mirror'); $('#mirrorTg').classList.toggle('on', on); };
 $('#buildTg').onclick = () => { buildOn=!buildOn; $('#buildTg').classList.toggle('on', buildOn); $('#buildOpts').classList.toggle('show', buildOn); };
